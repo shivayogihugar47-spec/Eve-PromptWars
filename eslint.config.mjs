@@ -6,5 +6,5 @@ export default defineConfig([
   ...nextVitals,
   ...nextTypescript,
   { rules: { "react-hooks/set-state-in-effect": "off" } },
-  globalIgnores([".next/**", ".next-dev/**", "out/**", "build/**", "next-env.d.ts"]),
+  globalIgnores([".next/**", ".next-dev/**", "out/**", "build/**", "coverage/**", "next-env.d.ts"]),
 ]);

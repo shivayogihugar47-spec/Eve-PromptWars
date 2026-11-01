@@ -26,7 +26,7 @@ import { detectViolations, analyzeImpact } from "@/lib/run/impact";
 import { parseChangeText } from "@/lib/run/intake";
 import { generateOptions } from "@/lib/run/options";
 import { generateRisks } from "@/lib/run/risks";
-import { applySelectedProposal, revertToPreviousVersion } from "@/lib/run/apply";
+import { applySelectedProposal, commitPlanVersion, revertToPreviousVersion } from "@/lib/run/apply";
 import { deterministicShiftOption, verifyOptions } from "@/lib/run/verify";
 import { isSyntheticFallbackRisk } from "@/lib/run/types";
 import { POST as intakePost } from "@/app/api/run/[eventId]/intake/route";
@@ -597,6 +597,117 @@ describe("RUN version control", () => {
     expect(mocks.transaction).not.toHaveBeenCalled();
   });
 
+  it("rejects malformed idempotency keys before touching persistence", async () => {
+    await expect(commitPlanVersion({
+      eventId: ids.setup,
+      expectedVersion: 1,
+      idempotencyKey: "bad",
+      plan: makePlan([]),
+      changes: [],
+      note: "test",
+      actor: "organizer",
+    })).rejects.toMatchObject({ status: 400 });
+
+    expect(mocks.sql).not.toHaveBeenCalled();
+    expect(mocks.transaction).not.toHaveBeenCalled();
+  });
+
+  it("returns the stored result for an idempotent retry", async () => {
+    const storedPlan = makePlan([]);
+    mocks.sql.mockResolvedValueOnce([{
+      event_id: ids.setup,
+      version: 5,
+      result: storedPlan,
+    }]);
+
+    await expect(commitPlanVersion({
+      eventId: ids.setup,
+      expectedVersion: 4,
+      idempotencyKey: "retry-request-123",
+      plan: makePlan([]),
+      changes: [],
+      note: "test",
+      actor: "organizer",
+    })).resolves.toEqual({ version: 5, plan: storedPlan, idempotent: true });
+    expect(mocks.transaction).not.toHaveBeenCalled();
+  });
+
+  it("rejects an idempotency key already used by another event", async () => {
+    mocks.sql.mockResolvedValueOnce([{
+      event_id: ids.caterer,
+      version: 5,
+      result: makePlan([]),
+    }]);
+
+    await expect(commitPlanVersion({
+      eventId: ids.setup,
+      expectedVersion: 4,
+      idempotencyKey: "retry-request-123",
+      plan: makePlan([]),
+      changes: [],
+      note: "test",
+      actor: "organizer",
+    })).rejects.toMatchObject({ status: 409 });
+  });
+
+  it("commits the next version and returns the newly stored plan", async () => {
+    const plan = makePlan([makeTask(ids.setup, "Setup", "2026-10-10T09:00:00.000Z", 30)]);
+    mocks.sql.mockResolvedValueOnce([]);
+    mocks.transaction.mockResolvedValue([[{ version: 2, operation_nonce: "nonce" }], [], [], [], []]);
+
+    await expect(commitPlanVersion({
+      eventId: ids.setup,
+      expectedVersion: 1,
+      idempotencyKey: "commit-request-123",
+      plan,
+      changes: [{ type: "DELAY", taskId: ids.setup, minutes: 10 }],
+      note: "Adjusted setup",
+      actor: "organizer",
+    })).resolves.toEqual({ version: 2, plan, idempotent: false });
+    expect(mocks.transaction).toHaveBeenCalledOnce();
+    expect(mocks.transaction.mock.calls[0][0]).toHaveLength(4);
+  });
+
+  it("returns a conflict if the version compare-and-swap loses a race", async () => {
+    mocks.sql.mockResolvedValue([]);
+    mocks.transaction.mockResolvedValue([[], [], [], []]);
+
+    await expect(commitPlanVersion({
+      eventId: ids.setup,
+      expectedVersion: 1,
+      idempotencyKey: "race-request-123",
+      plan: makePlan([]),
+      changes: [],
+      note: "test",
+      actor: "organizer",
+    })).rejects.toMatchObject({ status: 409 });
+  });
+
+  it("returns a verified option when replaying an applied proposal", async () => {
+    const resultPlan = makePlan([]);
+    const option = { title: "Keep current schedule", plan: resultPlan };
+    mocks.sql
+      .mockResolvedValueOnce([{ event_id: ids.setup, version: 4, result: resultPlan }])
+      .mockResolvedValueOnce([{ payload: { changes: [], verified: [option] } }]);
+
+    await expect(applySelectedProposal({
+      run: { eventId: ids.setup, version: 4, plan: makePlan([]) },
+      eventId: ids.setup,
+      proposalId: "proposal",
+      optionIndex: 0,
+      expectedVersion: 4,
+      idempotencyKey: "retry-request-123",
+      actor: "organizer",
+    })).resolves.toEqual({
+      version: 4,
+      plan: resultPlan,
+      option,
+      idempotent: true,
+      changes: [],
+    });
+    expect(mocks.transaction).not.toHaveBeenCalled();
+  });
+
   it("returns HTTP 409 when intake submits a stale version", async () => {
     mocks.consumeRateLimit.mockResolvedValue(true);
     mocks.rateLimitIdentity.mockReturnValue("test-client");
@@ -648,5 +759,24 @@ describe("RUN version control", () => {
     expect(result.plan).toEqual(previousPlan);
     expect(result.idempotent).toBe(false);
     expect(mocks.transaction).toHaveBeenCalledOnce();
+  });
+
+  it("does not allow reverting the first plan version", async () => {
+    mocks.loadOrganizerRun.mockResolvedValue({
+      eventId: ids.setup,
+      version: 1,
+      plan: makePlan([]),
+      answers: {},
+      organizerToken: "token",
+    });
+    mocks.sql.mockResolvedValueOnce([]);
+
+    await expect(revertToPreviousVersion({
+      request: new Request("https://eventmate.test"),
+      eventId: ids.setup,
+      expectedVersion: 1,
+      idempotencyKey: "revert-request-123",
+    })).rejects.toMatchObject({ status: 400 });
+    expect(mocks.transaction).not.toHaveBeenCalled();
   });
 });

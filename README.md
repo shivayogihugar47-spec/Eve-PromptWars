@@ -6,6 +6,22 @@ Eve helps people turn an event idea into a practical plan. Answer a short set of
 
 It is for people planning weddings, birthdays, community gatherings, corporate events, festivals, and other celebrations—especially organizers who want a structured starting point without needing event-planning expertise.
 
+## Challenge vertical and persona
+
+- **Vertical:** Event planning and event operations for celebrations and community gatherings.
+- **Primary persona:** A first-time or time-constrained organizer who needs a usable plan and a way to respond safely when the event day changes.
+- **Problem addressed:** Planning details are scattered across budgets, vendors, accessibility needs, guest activities, and day-of schedules. Eve gathers the context once and connects the resulting plan to verified operational changes.
+
+## Approach and assumptions
+
+1. The ASK flow collects the event type, date, city, guest count, budget, occasion-specific details, accessibility/dietary needs, and age mix before generation.
+2. The AI drafts a structured plan. Zod validates its shape; deterministic code normalizes budget allocations and turns the timeline into dependency-aware tasks.
+3. During RUN, AI may propose actions, but plain-code checks enforce task IDs, dependencies, schedule constraints, budget changes, and organizer approval before a change is saved.
+4. Vendor ideas are planning categories, not verified businesses. Search links send the organizer to external search providers; availability and prices must be confirmed by the organizer.
+5. Budget examples and formatting use INR and India-oriented units. The organizer's budget remains authoritative; generated estimates are not quotes.
+6. Accessibility and dietary answers are organizer-provided planning inputs, not a guarantee of venue compliance, medical suitability, or legal accessibility.
+7. An AI outage or invalid response must not be represented as a successful plan or as a real contingency. The app preserves the organizer's answers and asks them to retry.
+
 ## What it does
 
 - Guides visitors through the ASK flow before asking them to sign in.
@@ -115,8 +131,11 @@ Run `npm run db:migrate` against the production database before the first live p
 
 ## Tests and checks
 
+The test suite includes unit tests for event-question progression, budgeting, vendor links, request validation, and RUN scheduling/security, plus API tests for health checks, saved events, task completion, and plan generation/error handling. Coverage thresholds guard statements, branches, functions, and lines; GitHub Actions runs the coverage suite, lint, type-checking, and a production build on every push and pull request to `main`.
+
 ```powershell
 npm run test
+npm run test:coverage
 npm run lint -- --max-warnings=0
 npx tsc --noEmit
 npm run build
