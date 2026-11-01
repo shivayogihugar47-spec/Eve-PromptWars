@@ -10,7 +10,7 @@ It is for people planning weddings, birthdays, community gatherings, corporate e
 
 - **Vertical:** Event planning and event operations for celebrations and community gatherings.
 - **Primary persona:** A first-time or time-constrained organizer who needs a usable plan and a way to respond safely when the event day changes.
-- **Problem addressed:** Planning details are scattered across budgets, vendors, accessibility needs, guest activities, and day-of schedules. Eve gathers the context once and connects the resulting plan to verified operational changes.
+- **Problem addressed:** Planning details are scattered across budgets, vendor searches, accessibility needs, guest activities, and day-of schedules. Eve gathers the context once and connects the resulting plan to organizer-reviewed operational changes.
 
 ## Approach and assumptions
 

@@ -13,19 +13,22 @@ export function DiyaBillScanner({
   open: boolean;
   onClose: () => void;
 }) {
-  const [done, setDone] = useState(false);
-
-  useEffect(() => {
-    if (!open) return;
-    setDone(false);
-    const t = setTimeout(() => setDone(true), 2600);
-    return () => clearTimeout(t);
-  }, [open]);
-
   return (
     <AnimatePresence>
-      {open && (
-        <motion.div
+      {open && <BillScannerDialog onClose={onClose} />}
+    </AnimatePresence>
+  );
+}
+
+function BillScannerDialog({ onClose }: { onClose: () => void }) {
+  const [done, setDone] = useState(false);
+  useEffect(() => {
+    const t = setTimeout(() => setDone(true), 2600);
+    return () => clearTimeout(t);
+  }, []);
+
+  return (
+    <motion.div
           className="fixed inset-0 z-[80] flex items-center justify-center p-4 bg-black/30 backdrop-blur-sm"
           initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }}
           onClick={onClose}
@@ -81,8 +84,6 @@ export function DiyaBillScanner({
               </motion.div>
             )}
           </motion.div>
-        </motion.div>
-      )}
-    </AnimatePresence>
+    </motion.div>
   );
 }

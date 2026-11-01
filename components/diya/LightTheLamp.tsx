@@ -12,14 +12,14 @@ interface Props {
 export function LightTheLamp({ onLit }: Props) {
   const [phase, setPhase] = useState<"sleep" | "igniting" | "lit">("sleep");
   const [holdPct, setHoldPct] = useState(0);
-  const holdTimer = useRef<ReturnType<typeof setInterval>>();
+  const holdTimer = useRef<ReturnType<typeof setInterval> | null>(null);
   const ignitionRef = useRef(false);
   const { setMood, say, pulse } = useDiya();
 
   const ignite = () => {
     if (ignitionRef.current) return;
     ignitionRef.current = true;
-    clearInterval(holdTimer.current);
+    if (holdTimer.current) clearInterval(holdTimer.current);
     setHoldPct(100);
     setPhase("igniting");
     setMood("greet");                       // woken up
@@ -42,7 +42,7 @@ export function LightTheLamp({ onLit }: Props) {
     }, 40);
   };
   const endHold = () => {
-    clearInterval(holdTimer.current);
+    if (holdTimer.current) clearInterval(holdTimer.current);
     if (phase !== "sleep" || ignitionRef.current) return;
     // quick tap → light too
     if (holdPct < 100) ignite();
@@ -92,7 +92,7 @@ export function LightTheLamp({ onLit }: Props) {
             exit={{ opacity: 0, scale: 0.9 }}
             onPointerDown={startHold}
             onPointerUp={endHold}
-            onPointerLeave={() => { clearInterval(holdTimer.current); if (!ignitionRef.current) setHoldPct(0); }}
+            onPointerLeave={() => { if (holdTimer.current) clearInterval(holdTimer.current); if (!ignitionRef.current) setHoldPct(0); }}
             whileHover={{ scale: 1.05 }}
             whileTap={{ scale: 0.95 }}
             className="relative overflow-hidden flex items-center gap-3 px-8 py-4 rounded-2xl font-bold text-base text-white shadow-lg shadow-amber-200/60"

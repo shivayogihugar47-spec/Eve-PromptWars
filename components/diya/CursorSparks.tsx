@@ -8,7 +8,7 @@ export function CursorSparks() {
   const canvasRef = useRef<HTMLCanvasElement>(null);
   const sparks = useRef<Spark[]>([]);
   const nextId = useRef(0);
-  const rafRef = useRef<number>();
+  const rafRef = useRef<number | null>(null);
 
   useEffect(() => {
     // Disable on mobile and reduced-motion
@@ -64,7 +64,7 @@ export function CursorSparks() {
     return () => {
       window.removeEventListener("resize", resize);
       window.removeEventListener("mousemove", onMove);
-      if (rafRef.current) cancelAnimationFrame(rafRef.current);
+      if (rafRef.current !== null) cancelAnimationFrame(rafRef.current);
     };
   }, []);
 

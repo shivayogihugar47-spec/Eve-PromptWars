@@ -1,6 +1,6 @@
 "use client";
 
-import { useCallback, useEffect, useMemo, useState } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { AnimatePresence, motion } from "framer-motion";
 import {
   Activity, AlertTriangle, ArrowRight, Check, CheckCircle2, Circle, Clock, CloudRain, Copy, ListChecks,
@@ -68,6 +68,32 @@ interface Props {
   organizerToken: string;
   plan: RunPlan;
   onBack: () => void;
+}
+
+function readQueuedChanges(key: string): { changes: QueuedChange[]; error: string } {
+  if (typeof window === "undefined") return { changes: [], error: "" };
+  try {
+    const saved = window.localStorage.getItem(key);
+    if (!saved) return { changes: [], error: "" };
+    const parsed: unknown = JSON.parse(saved);
+    if (!Array.isArray(parsed) || parsed.some((change) => (
+      !change
+      || typeof change !== "object"
+      || typeof change.id !== "string"
+      || (change.text !== undefined && typeof change.text !== "string")
+      || (change.action !== undefined && typeof change.action !== "string")
+      || (change.taskId !== undefined && typeof change.taskId !== "string")
+    ))) {
+      throw new Error("Stored offline updates are invalid.");
+    }
+    return { changes: parsed as QueuedChange[], error: "" };
+  } catch (reason) {
+    console.error("Unable to restore queued event updates.", reason);
+    return {
+      changes: [],
+      error: "A saved offline update could not be read from this browser.",
+    };
+  }
 }
 
 function getNowNext(plan: RunPlan, now: number) {
@@ -145,16 +171,19 @@ export function CommandCenter({ eventId, organizerToken, plan: initialPlan, onBa
   const { snapshot, isError, isLoading, refresh } = useLiveEvent(eventId, organizerToken, initialPlan);
   const version = snapshot?.version ?? 1;
   const { say, setMood } = useDiya();
+  const queueKey = `eventmate-run-queue:${eventId}`;
+  const [queueSeed] = useState(() => readQueuedChanges(queueKey));
   const [input, setInput] = useState("");
-  const [proposal, setProposal] = useState<ProposalView | null>(null);
+  const [proposalState, setProposal] = useState<ProposalView | null>(null);
   const [manualPlanB, setManualPlanB] = useState<ManualPlanB | null>(null);
   const [optimisticPlan, setOptimisticPlan] = useState<RunPlan | null>(null);
   const [notifications, setNotifications] = useState<OwnerMessage[]>([]);
   const [notificationRetry, setNotificationRetry] = useState<{ changes: RunChange[]; taskIds: string[]; version: number } | null>(null);
-  const [queued, setQueued] = useState<QueuedChange[]>([]);
+  const [queued, setQueuedState] = useState(queueSeed.changes);
+  const queuedRef = useRef(queueSeed.changes);
   const [isOnline, setIsOnline] = useState(true);
   const [busy, setBusy] = useState(false);
-  const [error, setError] = useState("");
+  const [error, setError] = useState(queueSeed.error);
   const [summary, setSummary] = useState<SummaryView | null>(null);
   const [templateName, setTemplateName] = useState("");
   const [templateSaved, setTemplateSaved] = useState(false);
@@ -162,7 +191,23 @@ export function CommandCenter({ eventId, organizerToken, plan: initialPlan, onBa
   const [scheduleFilter, setScheduleFilter] = useState<ScheduleFilter>("all");
   const [selectedTaskId, setSelectedTaskId] = useState("");
   const plan = optimisticPlan ?? snapshot?.plan ?? initialPlan;
-  const queueKey = `eventmate-run-queue:${eventId}`;
+  const proposal = proposalState?.version === version ? proposalState : null;
+  const hasStaleProposal = Boolean(proposalState && proposalState.version !== version);
+  const visibleError = hasStaleProposal
+    ? "The plan changed while you were reviewing. The latest version is loaded; submit your update again."
+    : error;
+
+  const setQueued = useCallback((update: (existing: QueuedChange[]) => QueuedChange[]) => {
+    const next = update(queuedRef.current);
+    queuedRef.current = next;
+    setQueuedState(next);
+    try {
+      window.localStorage.setItem(queueKey, JSON.stringify(next));
+    } catch (reason) {
+      console.error("Unable to persist offline event updates.", reason);
+      setError("This browser could not save the offline queue. Keep this page open and reconnect.");
+    }
+  }, [queueKey]);
 
   const tasks = plan.timeline;
   const completed = tasks.filter((task) => task.status === "done").length;
@@ -200,44 +245,21 @@ export function CommandCenter({ eventId, organizerToken, plan: initialPlan, onBa
     readOnline();
     window.addEventListener("online", readOnline);
     window.addEventListener("offline", readOnline);
-    try {
-      const saved = localStorage.getItem(queueKey);
-      if (saved) setQueued(JSON.parse(saved) as QueuedChange[]);
-    } catch (reason) {
-      console.error("Unable to restore queued event updates.", reason);
-      setError("A saved offline update could not be read from this browser.");
-    }
     return () => {
       window.clearInterval(interval);
       window.removeEventListener("online", readOnline);
       window.removeEventListener("offline", readOnline);
     };
-  }, [queueKey]);
-
-  useEffect(() => {
-    try {
-      localStorage.setItem(queueKey, JSON.stringify(queued));
-    } catch (reason) {
-      console.error("Unable to persist offline event updates.", reason);
-      setError("This browser could not save the offline queue. Keep this page open and reconnect.");
-    }
-  }, [queueKey, queued]);
-
-  useEffect(() => {
-    if (proposal && proposal.version !== version) {
-      setProposal(null);
-      setError("The plan changed while you were reviewing. The latest version is loaded; submit your update again.");
-    }
-  }, [proposal, version]);
+  }, []);
 
   useEffect(() => {
     if (busy) setMood("thinking");
     else if (proposal?.impact.severity === "high") setMood("worried");
   }, [busy, proposal?.impact.severity, setMood]);
 
-  const persistQueuedChange = (change: QueuedChange) => {
+  const persistQueuedChange = useCallback((change: QueuedChange) => {
     setQueued((existing) => existing.some((entry) => entry.id === change.id) ? existing : [...existing, change]);
-  };
+  }, [setQueued]);
 
   const submitChange = useCallback(async (change: QueuedChange, removeFromQueue = false) => {
     if (!isOnline) {
@@ -247,6 +269,7 @@ export function CommandCenter({ eventId, organizerToken, plan: initialPlan, onBa
     }
     setBusy(true);
     setError("");
+    setProposal(null);
     setManualPlanB(null);
     try {
       const response = await fetch(`/api/run/${eventId}/intake`, {
@@ -297,7 +320,7 @@ export function CommandCenter({ eventId, organizerToken, plan: initialPlan, onBa
     } finally {
       setBusy(false);
     }
-  }, [eventId, isOnline, organizerToken, refresh, say, version]);
+  }, [eventId, isOnline, organizerToken, persistQueuedChange, refresh, say, setQueued, version]);
 
   useEffect(() => {
     if (!isOnline || queued.length === 0 || busy || proposal) return;
@@ -467,8 +490,8 @@ export function CommandCenter({ eventId, organizerToken, plan: initialPlan, onBa
           <WifiOff size={16} className="mt-0.5 shrink-0"/><span><strong>{queued.length ? `${queued.length} update${queued.length === 1 ? "" : "s"} waiting to sync.` : "Connection interrupted."}</strong> {queued.length ? "Your updates are saved on this device and will retry when you reconnect." : "Showing the last loaded event snapshot."}</span>
         </div>}
         {!isOnline && queued.length > 0 && <p className="mt-2 text-xs font-bold text-amber-950">Offline — will sync automatically.</p>}
-        {error && <div role="alert" className="mt-4 flex items-start justify-between gap-3 rounded-2xl border border-[#F0CAC2] bg-[#FFF5F2] px-4 py-3 text-sm text-[#8D3E34]">
-          <span>{error}</span>
+        {visibleError && <div role="alert" className="mt-4 flex items-start justify-between gap-3 rounded-2xl border border-[#F0CAC2] bg-[#FFF5F2] px-4 py-3 text-sm text-[#8D3E34]">
+          <span>{visibleError}</span>
           {error.includes("Retry notifications") && <button onClick={() => void retryNotifications()} className="shrink-0 rounded-lg border border-[#E5B9AF] px-3 py-1.5 text-xs font-bold"><RefreshCw size={12} className="mr-1 inline"/>Retry</button>}
         </div>}
         {manualPlanB && <section role="status" className="mt-4 rounded-2xl border border-[#DCCB9D] bg-[#FFFEFA] px-4 py-4 shadow-sm">

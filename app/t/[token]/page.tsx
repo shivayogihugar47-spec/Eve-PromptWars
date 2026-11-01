@@ -52,11 +52,19 @@ export default function OwnerTasksPage() {
     const response = await fetch(`/api/t/${encodeURIComponent(token)}`);
     const payload = await response.json() as OwnerData & { error?: string };
     if (!response.ok) throw new Error(payload.error ?? "Unable to load your tasks.");
-    setData(payload);
+    return payload;
   }, [token]);
 
   useEffect(() => {
-    refresh().catch((reason: unknown) => setError(reason instanceof Error ? reason.message : "Unable to load your tasks."));
+    let active = true;
+    refresh()
+      .then((payload) => {
+        if (active) setData(payload);
+      })
+      .catch((reason: unknown) => {
+        if (active) setError(reason instanceof Error ? reason.message : "Unable to load your tasks.");
+      });
+    return () => { active = false; };
   }, [refresh]);
 
   const sendAction = async (
@@ -87,7 +95,7 @@ export default function OwnerTasksPage() {
         options?: OwnerOption[];
       };
       if (!response.ok) {
-        if (response.status === 409) await refresh();
+        if (response.status === 409) setData(await refresh());
         throw new Error(payload.error ?? "Unable to update this task.");
       }
       if (payload.proposalId && payload.options) {

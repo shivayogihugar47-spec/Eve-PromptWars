@@ -392,11 +392,6 @@ function VendorsSection({ city: initialCity }:{ city:string }) {
   const [searchedCity, setSearchedCity] = useState(initialCity);
   const [activeCategory, setActiveCategory] = useState("all");
 
-  useEffect(() => {
-    setCity(initialCity);
-    setSearchedCity(initialCity);
-  }, [initialCity]);
-
   const updateSearches = () => {
     const trimmed = city.trim();
     if (trimmed) setSearchedCity(trimmed);
@@ -538,13 +533,12 @@ type TabId = (typeof PLAN_TABS)[number]["id"];
 
 function PlanReveal({ plan, onBack, onStartRun }:{ plan:EventPlan; onBack:()=>void; onStartRun:()=>void }) {
   const [tab, setTab] = useState<TabId>("timeline");
-  const [showCelebration, setShowCelebration] = useState(false);
+  const [showCelebration, setShowCelebration] = useState(true);
   const ep = EVENT_PAL[plan.eventType?.toLowerCase()] ?? PAL[0];
   const { say } = useDiya();
   const highlights = (plan as EventPlan & {highlights?:string[]}).highlights ?? [];
 
   useEffect(()=>{
-    setShowCelebration(true);
     say("Your event plan is ready — this is going to be spectacular!", "celebrate", 4000);
     const timer = window.setTimeout(()=>setShowCelebration(false), 1800);
     return () => window.clearTimeout(timer);
@@ -553,7 +547,7 @@ function PlanReveal({ plan, onBack, onStartRun }:{ plan:EventPlan; onBack:()=>vo
   const tabCopy: Record<TabId, {title:string;description:string}> = {
     timeline: { title:"The day, at a glance", description:"A considered schedule from first setup to final send-off." },
     budget: { title:"Your budget, thoughtfully planned", description:"See where the budget goes and adjust your priorities." },
-    vendors: { title:`Find local vendors in ${plan.city}`, description:"Explore real place listings near your event city." },
+    vendors: { title:`Search vendors near ${plan.city}`, description:"Explore external listings; confirm availability and pricing directly." },
     checklist: { title:"Your planning checklist", description:"A clear set of next steps to keep everything moving." },
   };
   const metrics = [
@@ -665,7 +659,7 @@ function PlanReveal({ plan, onBack, onStartRun }:{ plan:EventPlan; onBack:()=>vo
             <AnimatePresence mode="wait">
               {tab==="timeline"  &&<motion.div key="tl" initial={{opacity:0,y:5}} animate={{opacity:1,y:0}} exit={{opacity:0}}><TimelineSection items={plan.timeline}/></motion.div>}
               {tab==="budget"    &&<motion.div key="bg" initial={{opacity:0,y:5}} animate={{opacity:1,y:0}} exit={{opacity:0}}><BudgetSection items={plan.budgetBreakdown} total={plan.budgetTotal}/></motion.div>}
-              {tab==="vendors"   &&<motion.div key="vd" initial={{opacity:0,y:5}} animate={{opacity:1,y:0}} exit={{opacity:0}}><VendorsSection city={plan.city}/></motion.div>}
+              {tab==="vendors"   &&<motion.div key="vd" initial={{opacity:0,y:5}} animate={{opacity:1,y:0}} exit={{opacity:0}}><VendorsSection key={plan.city} city={plan.city}/></motion.div>}
               {tab==="checklist" &&<motion.div key="cl" initial={{opacity:0,y:5}} animate={{opacity:1,y:0}} exit={{opacity:0}}><ChecklistSection items={plan.checklist}/></motion.div>}
             </AnimatePresence>
           </section>
@@ -720,6 +714,13 @@ interface SavedEventSummary {
   budgetTotal: number;
   version: number;
   createdAt: string;
+}
+
+async function fetchSavedEvents(): Promise<SavedEventSummary[]> {
+  const response = await fetch("/api/events");
+  const result = await response.json() as { events?: SavedEventSummary[]; error?: string };
+  if (!response.ok) throw new Error(result.error ?? "Unable to load saved events.");
+  return result.events ?? [];
 }
 
 interface LandingProps {
@@ -793,6 +794,9 @@ function Landing({ onStart, user, events, eventsLoading, eventsError, onSignIn, 
     <div className="min-h-screen overflow-hidden bg-[#F8F7F2] text-[#202B27]">
 
       {/* Nav */}
+      <a href="#main-content" className="sr-only focus:not-sr-only focus:fixed focus:left-4 focus:top-4 focus:z-50 focus:rounded-lg focus:bg-white focus:px-4 focus:py-3 focus:font-bold focus:text-[#214E43] focus:shadow-lg">
+        Skip to main content
+      </a>
       <nav className="relative z-20 flex items-center justify-between px-5 py-4 sm:px-8 sm:py-5 max-w-7xl mx-auto">
         <div className="flex items-center gap-3">
           <Image
@@ -826,6 +830,7 @@ function Landing({ onStart, user, events, eventsLoading, eventsError, onSignIn, 
         </div>
       </nav>
 
+      <main id="main-content">
       {user && (
         <section className="relative z-10 mx-auto w-full max-w-7xl px-5 pb-6 sm:px-8" aria-labelledby="saved-events-title">
           <div className="rounded-2xl border border-[#E5E0D3] bg-white/90 p-4 shadow-sm sm:p-5">
@@ -996,7 +1001,7 @@ function Landing({ onStart, user, events, eventsLoading, eventsError, onSignIn, 
             className="overflow-hidden border border-[#DADDD2] bg-[#FBFAF6] shadow-[0_22px_55px_rgba(38,52,43,0.08)]">
             <div className="flex flex-wrap items-center justify-between gap-3 border-b border-[#E7E6DD] px-4 py-4 sm:px-7">
               <div>
-                <p className="text-[10px] font-extrabold uppercase tracking-[0.16em] text-[#66736A]">A little preview</p>
+                <p className="text-[10px] font-extrabold uppercase tracking-[0.16em] text-[#66736A]">Illustrative sample · your plan uses your answers</p>
                 <p className="mt-1 font-display text-base font-extrabold text-[#202B27]">{selectedEvent?`${selectedEvent.label} in Jaipur`:"A celebration in Jaipur"}</p>
               </div>
               <div className="flex items-center gap-3">
@@ -1012,7 +1017,7 @@ function Landing({ onStart, user, events, eventsLoading, eventsError, onSignIn, 
               <div className="px-4 py-6 sm:px-7 sm:py-8">
                 <div className="mb-5 flex items-center justify-between gap-3">
                   <h3 className="font-display text-sm font-extrabold text-[#202B27] sm:text-base">The day, at a glance</h3>
-                  <span className="text-[10px] font-bold uppercase tracking-wider text-[#66736A]">Saturday · 12 October</span>
+                  <span className="text-[10px] font-bold uppercase tracking-wider text-[#66736A]">Example schedule · 12 October</span>
                 </div>
                 <div className="space-y-0">
                   {[
@@ -1038,7 +1043,7 @@ function Landing({ onStart, user, events, eventsLoading, eventsError, onSignIn, 
               <div className="border-t border-[#E7E6DD] bg-[#F4F3EC] px-4 py-6 sm:px-7 sm:py-8 md:border-l md:border-t-0">
                 <div className="flex items-start justify-between gap-4">
                   <div>
-                    <h3 className="font-display text-sm font-extrabold text-[#202B27] sm:text-base">Budget at a glance</h3>
+                    <h3 className="font-display text-sm font-extrabold text-[#202B27] sm:text-base">Example budget</h3>
                     <p className="mt-1 text-[10px] text-[#66736A] sm:text-xs">Thoughtfully split across the essentials</p>
                   </div>
                   <span className="font-display text-lg font-extrabold text-[#315C4C] sm:text-xl">₹8.5L</span>
@@ -1056,7 +1061,7 @@ function Landing({ onStart, user, events, eventsLoading, eventsError, onSignIn, 
                   ))}
                 </div>
                 <div className="mt-7 flex flex-wrap gap-2 border-t border-[#E0DFD4] pt-5">
-                  {["Vendor shortlist","Smart checklist","Day-of timeline"].map(label=>(
+                  {["Vendor search links","Smart checklist","Day-of timeline"].map(label=>(
                     <span key={label} className="inline-flex items-center gap-1.5 text-[9px] font-bold text-[#315C4C] sm:text-[10px]"><CheckCircle2 size={12} className="text-[#719879]"/>{label}</span>
                   ))}
                 </div>
@@ -1090,7 +1095,7 @@ function Landing({ onStart, user, events, eventsLoading, eventsError, onSignIn, 
                   <h3 className="font-display text-base font-extrabold text-[#202B27] sm:text-lg">{label}</h3>
                   <p className="mx-auto mt-2 max-w-xs text-xs leading-relaxed text-[#68736D] sm:text-sm">
                     {i===0 && "Answer a few thoughtful questions about the occasion, guest list, date and budget."}
-                    {i===1 && "Get a tailored timeline, budget breakdown, vendor shortlist and clear checklist."}
+                    {i===1 && "Get a tailored timeline, budget breakdown, vendor search links and clear checklist."}
                     {i===2 && "Keep every detail in view and feel ready when the day finally arrives."}
                   </p>
                 </div>
@@ -1118,6 +1123,7 @@ function Landing({ onStart, user, events, eventsLoading, eventsError, onSignIn, 
           </div>
         </motion.div>
       </section>
+      </main>
     </div>
   );
 }
@@ -1168,10 +1174,7 @@ function EventStudio({ initialType, initialLabel, onBack, onEventSaved }:{ initi
   },[isLoading,isGenerating,readyToGen,setMood]);
 
   useEffect(() => {
-    if (!isGenerating) {
-      setIsRetrying(false);
-      return;
-    }
+    if (!isGenerating) return;
     const timer = setTimeout(() => setIsRetrying(true), 3500);
     return () => clearTimeout(timer);
   },[isGenerating]);
@@ -1217,7 +1220,9 @@ function EventStudio({ initialType, initialLabel, onBack, onEventSaved }:{ initi
       body:JSON.stringify({step,answer:display,eventType:collectedData.eventType,city:collectedData.city})})
       .then(r=>r.json()).then((d:{comment:string})=>{
         if(d.comment) say(d.comment,"greet",4000);
-      }).catch(()=>{});
+      }).catch((error: unknown) => {
+        console.warn("Unable to load the optional planning comment.", error);
+      });
 
     const newHistory = [...history,{role:"user",content:display}];
     setHistory(newHistory);
@@ -1248,6 +1253,7 @@ function EventStudio({ initialType, initialLabel, onBack, onEventSaved }:{ initi
 
   const handleGenerate = useCallback(async () => {
     if (!readyToGen||isGenerating) return;
+    setIsRetrying(false);
     setIsGenerating(true);
     setGenerationError("");
     say("Building your professional event plan… this is going to be amazing!", "thinking", 15000);
@@ -1277,6 +1283,7 @@ function EventStudio({ initialType, initialLabel, onBack, onEventSaved }:{ initi
 
   if (plan && runSession && showCommandCenter) {
     return <CommandCenter
+      key={runSession.eventId}
       eventId={runSession.eventId}
       organizerToken={runSession.organizerToken}
       plan={runSession.plan}
@@ -1509,7 +1516,10 @@ export default function App() {
       .then(({ data, error }) => {
         if (error) throw new Error(error.message);
         const user = data?.user;
-        if (active && user) setAccount({ id: user.id, email: user.email, name: user.name });
+        if (active && user) {
+          setAccount({ id: user.id, email: user.email, name: user.name });
+          setEventsLoading(true);
+        }
       })
       .catch(() => {
         if (active) setEventsError("We couldn't check your sign-in status. Please refresh and try again.");
@@ -1521,12 +1531,9 @@ export default function App() {
   const refreshSavedEvents = useCallback(async () => {
     if (!account) return;
     setEventsLoading(true);
-    setEventsError("");
     try {
-      const response = await fetch("/api/events");
-      const result = await response.json() as { events?:SavedEventSummary[]; error?:string };
-      if (!response.ok) throw new Error(result.error ?? "Unable to load saved events.");
-      setSavedEvents(result.events ?? []);
+      setSavedEvents(await fetchSavedEvents());
+      setEventsError("");
     } catch (error) {
       setEventsError(error instanceof Error ? error.message : "Unable to load saved events. Please retry.");
     } finally {
@@ -1535,13 +1542,25 @@ export default function App() {
   }, [account]);
 
   useEffect(() => {
-    if (account) {
-      void refreshSavedEvents();
-    } else {
-      setSavedEvents([]);
-      setEventsLoading(false);
-    }
-  }, [account, refreshSavedEvents]);
+    if (!account) return;
+    let active = true;
+    fetchSavedEvents()
+      .then((events) => {
+        if (active) {
+          setSavedEvents(events);
+          setEventsError("");
+        }
+      })
+      .catch((error: unknown) => {
+        if (active) {
+          setEventsError(error instanceof Error ? error.message : "Unable to load saved events. Please retry.");
+        }
+      })
+      .finally(() => {
+        if (active) setEventsLoading(false);
+      });
+    return () => { active = false; };
+  }, [account]);
 
   const handleStart = useCallback((type?:string, label?:string)=>{
     setInitType(type);
@@ -1551,6 +1570,7 @@ export default function App() {
 
   const handleAuthenticated = (user: AccountUser) => {
     setAccount(user);
+    setEventsLoading(true);
     setAuthDialogOpen(false);
   };
 
@@ -1561,6 +1581,8 @@ export default function App() {
       return;
     }
     setAccount(null);
+    setSavedEvents([]);
+    setEventsLoading(false);
     setEventsError("");
   };
 
@@ -1582,7 +1604,7 @@ export default function App() {
 
   if (activeSavedRun) {
     return savedRunView ? (
-      <CommandCenter eventId={activeSavedRun.eventId} organizerToken="session" plan={activeSavedRun.plan} onBack={() => setSavedRunView(false)}/>
+      <CommandCenter key={activeSavedRun.eventId} eventId={activeSavedRun.eventId} organizerToken="session" plan={activeSavedRun.plan} onBack={() => setSavedRunView(false)}/>
     ) : (
       <PlanReveal plan={activeSavedRun.plan} onBack={() => setActiveSavedRun(null)} onStartRun={() => setSavedRunView(true)}/>
     );
@@ -1611,7 +1633,12 @@ export default function App() {
               initialType={initType}
               initialLabel={initLabel}
               onBack={()=>setScreen("landing")}
-              onEventSaved={() => void refreshSavedEvents()}
+              onEventSaved={() => {
+                if (account) {
+                  setEventsLoading(true);
+                  void refreshSavedEvents();
+                }
+              }}
             />
           </motion.div>
         )}

@@ -40,7 +40,7 @@ export function FloatingDiya() {
   const [showSettings, setShowSettings] = useState(false);
   const [size, setSize] = useState(88);
   const [hopKey, setHopKey] = useState(0);
-  const sleepTimer = useRef<ReturnType<typeof setTimeout>>();
+  const sleepTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
   const containerRef = useRef<HTMLDivElement>(null);
 
   // Gentle "lean toward the cursor" — delayed float via spring.
@@ -52,7 +52,7 @@ export function FloatingDiya() {
     const wasAsleep = useDiya.getState().isAsleep;
     wake();
     if (wasAsleep) setHopKey((k) => k + 1); // small hop on wake
-    clearTimeout(sleepTimer.current);
+    if (sleepTimer.current) clearTimeout(sleepTimer.current);
     sleepTimer.current = setTimeout(sleep, 30000);
   }, [wake, sleep]);
 
@@ -79,7 +79,7 @@ export function FloatingDiya() {
     sleepTimer.current = setTimeout(sleep, 30000);
     return () => {
       window.removeEventListener("mousemove", onMove);
-      clearTimeout(sleepTimer.current);
+      if (sleepTimer.current) clearTimeout(sleepTimer.current);
     };
   }, [leanX, leanY, dragging, resetSleepTimer, sleep]);
 
@@ -207,11 +207,15 @@ export function useWittyStatus(active: boolean, eventType = "other"): string {
   useEffect(() => {
     if (!active) return;
     const lines = EVENT_WITTY_LINES[eventType] ?? EVENT_WITTY_LINES.other;
-    setLine(lines[Math.floor(Math.random() * lines.length)]);
+    const chooseLine = () => setLine(lines[Math.floor(Math.random() * lines.length)]);
+    const initialTimer = window.setTimeout(chooseLine, 0);
     const id = setInterval(() => {
-      setLine(lines[Math.floor(Math.random() * lines.length)]);
+      chooseLine();
     }, 2200);
-    return () => clearInterval(id);
+    return () => {
+      window.clearTimeout(initialTimer);
+      clearInterval(id);
+    };
   }, [active, eventType]);
   return line;
 }
