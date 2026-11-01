@@ -1,0 +1,24 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="560" height="180" viewBox="0 0 560 180" role="img" aria-labelledby="title description">
+  <title id="title">Eve</title>
+  <desc id="description">Eve — Plans your celebration. Runs it too.</desc>
+  <defs>
+    <linearGradient id="brand" x1="0" y1="0" x2="1" y2="1">
+      <stop offset="0" stop-color="#7654FF"/>
+      <stop offset=".52" stop-color="#F052A8"/>
+      <stop offset="1" stop-color="#FF9B3D"/>
+    </linearGradient>
+    <linearGradient id="flame" x1="0" y1="0" x2="0" y2="1">
+      <stop offset="0" stop-color="#FFE889"/>
+      <stop offset="1" stop-color="#FF9F2F"/>
+    </linearGradient>
+  </defs>
+  <rect x="4" y="4" width="172" height="172" rx="38" fill="url(#brand)"/>
+  <path d="M90 28c-10 20-30 39-30 62a30 30 0 0 0 60 0c0-23-20-42-30-62Z" fill="url(#flame)"/>
+  <path d="M90 62c-7 12-15 21-15 32a15 15 0 0 0 30 0c0-11-8-20-15-32Z" fill="#FFF8DE"/>
+  <path d="M36 112c4 31 25 48 54 48s50-17 54-48c-32 10-76 10-108 0Z" fill="#FFFDF8"/>
+  <circle cx="66" cy="139" r="4" fill="#F052A8"/>
+  <circle cx="90" cy="145" r="4" fill="#7654FF"/>
+  <circle cx="114" cy="139" r="4" fill="#FF9B3D"/>
+  <text x="202" y="105" fill="url(#brand)" font-family="Inter, Arial, sans-serif" font-size="94" font-weight="800" letter-spacing="-5">Eve</text>
+  <text x="207" y="146" fill="#514B5D" font-family="Inter, Arial, sans-serif" font-size="19" font-weight="500">Plans your celebration. Runs it too.</text>
+</svg>
